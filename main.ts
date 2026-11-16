@@ -1,17 +1,31 @@
-// The Dragon in the Lantern — entry program for ai-excited-01.
-// Copies the entry image (entry.png) that sits next to this file into the
-// output directory, byte for byte. The copy is deterministic: running the
-// program twice writes identical bytes.
+// The Hand from the Wall
+import { copyFile, mkdir, readFile, stat } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { copyFileSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+const source = fileURLToPath(new URL('./entry.png', import.meta.url));
+const sourceStats = await stat(source);
+if (!sourceStats.isFile() || sourceStats.size === 0) {
+  throw new Error('Source image is missing, empty, or not a regular file.');
+}
 
-const outDir = process.env.MAKEFUN_OUTPUT_DIR || "/output";
-const here = dirname(fileURLToPath(import.meta.url));
-const src = join(here, "entry.png");
-const dest = join(outDir, "entry.png");
+const output = resolve(process.env.MAKEFUN_OUTPUT_DIR ?? '/output', 'entry.png');
+if (output === source) {
+  throw new Error('Output must differ from the source image.');
+}
+await mkdir(dirname(output), { recursive: true });
+await copyFile(source, output);
+const outputStats = await stat(output);
+if (outputStats.size !== sourceStats.size) {
+  throw new Error('Copied image size differs from the source.');
+}
 
-mkdirSync(outDir, { recursive: true });
-copyFileSync(src, dest);
-console.log(`wrote ${dest}`);
+// Compare every byte to ensure the copy preserves the original image exactly.
+const [sourceBytes, outputBytes] = await Promise.all([
+  readFile(source),
+  readFile(output),
+]);
+if (!sourceBytes.equals(outputBytes)) {
+  throw new Error('Copied image is not byte-identical to the source.');
+}
+console.log(`Wrote ${output} (${outputStats.size} bytes; byte-identical copy).`);

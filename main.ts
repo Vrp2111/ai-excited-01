@@ -1,31 +1,27 @@
 // The Hand from the Wall
-import { copyFile, mkdir, readFile, stat } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { mkdir, copyFile, stat, readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const source = fileURLToPath(new URL('./entry.png', import.meta.url));
-const sourceStats = await stat(source);
-if (!sourceStats.isFile() || sourceStats.size === 0) {
-  throw new Error('Source image is missing, empty, or not a regular file.');
+const source = join(dirname(fileURLToPath(import.meta.url)), "entry.png");
+const outputDir = process.env.MAKEFUN_OUTPUT_DIR || "/output";
+const destination = join(outputDir, "entry.png");
+
+const sourceStat = await stat(source);
+if (!sourceStat.isFile() || sourceStat.size === 0) {
+  throw new Error("Source image entry.png is missing or empty");
 }
 
-const output = resolve(process.env.MAKEFUN_OUTPUT_DIR ?? '/output', 'entry.png');
-if (output === source) {
-  throw new Error('Output must differ from the source image.');
-}
-await mkdir(dirname(output), { recursive: true });
-await copyFile(source, output);
-const outputStats = await stat(output);
-if (outputStats.size !== sourceStats.size) {
-  throw new Error('Copied image size differs from the source.');
-}
+await mkdir(outputDir, { recursive: true });
+await copyFile(source, destination);
 
-// Compare every byte to ensure the copy preserves the original image exactly.
-const [sourceBytes, outputBytes] = await Promise.all([
-  readFile(source),
-  readFile(output),
-]);
+const destinationStat = await stat(destination);
+// Compare the actual bytes as well as sizes to verify an identical copy.
+if (destinationStat.size !== sourceStat.size) {
+  throw new Error(`Copied file size differs from source: ${destinationStat.size} !== ${sourceStat.size}`);
+}
+const [sourceBytes, outputBytes] = await Promise.all([readFile(source), readFile(destination)]);
 if (!sourceBytes.equals(outputBytes)) {
-  throw new Error('Copied image is not byte-identical to the source.');
+  throw new Error("Copied output is not byte-identical to source");
 }
-console.log(`Wrote ${output} (${outputStats.size} bytes; byte-identical copy).`);
+console.log(`Wrote ${destination} (${destinationStat.size} bytes)`);
